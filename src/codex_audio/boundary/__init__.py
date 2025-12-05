@@ -1,0 +1,1 @@
+﻿"""Boundary detection logic."""

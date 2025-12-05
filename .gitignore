@@ -1,0 +1,16 @@
+﻿__pycache__/
+*.py[cod]
+.venv/
+.env
+.mypy_cache/
+.pytest_cache/
+dist/
+build/
+htmlcov/
+.coverage*
+*.egg-info/
+data/
+samples/
+notebooks/.ipynb_checkpoints/
+logs/
+out/

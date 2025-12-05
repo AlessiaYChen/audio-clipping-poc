@@ -1,0 +1,3 @@
+﻿audio_path,annotation_path,station
+data/CKNW_2025-01-15.wav,annotations/CKNW_2025-01-15.csv,CKNW
+data/CFAX_2025-01-12.wav,annotations/CFAX_2025-01-12.csv,CFAX

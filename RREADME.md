@@ -1,0 +1,301 @@
+# 📡 News Audio Story Segmentation
+
+### Hybrid Audio + Text Pipeline for Radio Story Boundary Detection
+
+This project performs **automatic segmentation of radio newscasts** (CKNW, CFAX, CBC, CHNL, CKFR) into **story-level audio clips** using a hybrid approach that combines:
+
+* **Audio features** (VAD, diarization, audio embeddings, acoustic change detection)
+* **Transcription + text features** (word timestamps, semantic embeddings, topic shifts)
+* **Heuristic + data-driven boundary detection**
+* **FFmpeg-based clipping**
+* **Evaluation harness** with precision/recall/F1 metrics and parameter sweeps
+
+> **Goal:** Production-quality, robust, station-independent story segmentation for continuous 24/7 radio monitoring.
+
+---
+
+## 🚀 Features
+
+* 🎧 **Audio track analysis**
+
+  * Voice Activity Detection (VAD)
+  * Speaker diarization (anchor detection, studio/field separation)
+  * Short-window audio embeddings (3–5 s)
+  * Acoustic change-point detection
+  * Silence & jingle detection
+
+* 📝 **Text track analysis**
+
+  * Whisper/Azure STT transcription
+  * Word-aligned timestamps
+  * Text chunking (5–10 s)
+  * Semantic embeddings
+  * Topic shift detection
+
+* 🔍 **Hybrid boundary detection**
+
+  * Combines audio + text + structural heuristics
+  * Scored boundary candidates with reasons
+  * Station-specific tunable configs
+
+* ✂️ **Clipper**
+
+  * Clean, gap-free, timestamp-accurate FFmpeg clipping
+
+* 📊 **Evaluation harness**
+
+  * GT boundary loading
+  * Tolerance-based matching
+  * Precision/recall/F1
+  * Per-station metrics
+  * Threshold sweeps for scientific tuning
+
+---
+
+# 📦 Architecture Overview
+
+```
+audio file
+   │
+   ▼
+┌──────────────────┐
+│    Ingestor      │  → normalize + resample (16k mono WAV)
+└──────────────────┘
+   │
+   ▼
+
+        ┌────────────────────────────────────────┐
+        │         Dual Feature Extraction        │
+        └────────────────────────────────────────┘
+
+  ┌───────────────────────────┐      ┌──────────────────────────────┐
+  │      Audio Track          │      │          Text Track          │
+  │  - VAD                    │      │  - Transcription (Whisper)   │
+  │  - Diarization            │      │  - Word timestamps           │
+  │  - Audio embeddings       │      │  - Text chunking (5–10 s)    │
+  │  - Jingle/silence detect  │      │  - Semantic embeddings       │
+  └───────────────────────────┘      │  - Semantic shift detection  │
+                                     └──────────────────────────────┘
+   │                                           │
+   └──────────────────────┬────────────────────┘
+                          ▼
+            ┌───────────────────────────────────────┐
+            │        Hybrid Boundary Detector        │
+            │  - score candidates                    │
+            │  - merge audio + text signals          │
+            └───────────────────────────────────────┘
+                          │
+                          ▼
+            ┌───────────────────────────────────────┐
+            │             Segment Planner            │
+            │ - prune, dedupe, min length            │
+            │ - snap to word boundary / energy dip   │
+            └───────────────────────────────────────┘
+                          │
+                          ▼
+            ┌───────────────────────────────────────┐
+            │                Clipper                 │
+            │     - FFmpeg cuts per segment          │
+            └───────────────────────────────────────┘
+                          │
+                          ▼
+               Output:
+               - segments.json
+               - transcript.json
+               - segments/*.wav
+
+```
+
+A high-resolution PDF version is available (`docs/news_audio_architecture.pdf`).
+
+---
+
+# 📁 Repository Structure
+
+Recommended layout:
+
+```
+codex-audio/
+  README.md
+  pyproject.toml
+  codex_audio/
+    __init__.py
+    config.py
+    models.py
+    cli.py
+
+    ingest.py
+    io_utils.py
+
+    transcription/
+      whisper_backend.py
+
+    features/
+      vad.py
+      diarization.py
+      embeddings.py
+      lowlevel.py
+
+    text_features/
+      segments.py
+      embeddings.py
+      change_points.py
+
+    segmentation/
+      candidates.py
+      scoring.py
+      planner.py
+
+    clipping/
+      ffmpeg_wrapper.py
+
+    evaluation/
+      io.py
+      matching.py
+      metrics.py
+      sweep.py
+      cli.py
+
+  docs/
+    news_audio_architecture.pdf
+    examples.md
+  tests/
+    test_ingest.py
+    test_features.py
+    test_segmentation.py
+    test_evaluation.py
+```
+
+---
+
+# 🛠 Installation
+
+### Requirements:
+
+* Python 3.10+
+* FFmpeg installed on system
+* Whisper or Azure STT
+* Pyannote (optional but recommended for diarization)
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+# 🧪 Running the Pipeline
+
+### Segment an audio file
+
+```bash
+codex-audio segment input.wav \
+  --station CKNW \
+  --out out_dir/
+```
+
+Outputs:
+
+```
+out_dir/
+  segments/
+    segment_000.wav
+    segment_001.wav
+  segments.json
+  transcript.json
+```
+
+---
+
+# 📊 Evaluation Harness
+
+### Manifest format (`evaluation_manifest.csv`)
+
+```csv
+audio_path,annotation_path,station
+data/CKNW_2025-01-15.wav,annotations/CKNW_2025-01-15.csv,CKNW
+data/CFAX_2025-01-12.wav,annotations/CFAX_2025-01-12.csv,CFAX
+```
+
+### Ground truth annotation CSV
+
+```csv
+time_s
+61.3
+185.9
+402.4
+...
+```
+
+### Run evaluation
+
+```bash
+codex-audio eval \
+  --manifest evaluation_manifest.csv \
+  --tolerance-s 3.0 \
+  --config station_config.yaml
+```
+
+Output example:
+
+```
+Overall:
+  Precision = 0.78
+  Recall    = 0.74
+  F1        = 0.76
+
+CKNW:
+  Precision = 0.80
+  Recall    = 0.71
+  F1        = 0.75
+```
+
+---
+
+# 🔬 Threshold Sweeps
+
+```bash
+codex-audio sweep \
+  --manifest evaluation_manifest.csv \
+  --param silence_min_s 0.7 1.0 1.3 \
+  --param min_boundary_score 3.0 4.0 5.0
+```
+
+Generates `sweep_results.csv`:
+
+```
+silence_min_s,min_boundary_score,F1
+1.0,4.0,0.78
+0.7,3.0,0.74
+...
+```
+
+---
+
+# 🧩 Extending the Pipeline
+
+Future enhancements:
+
+* LLM-based story labeling (title + summary per segment)
+* Automatic jingle classifier per station
+* Real-time streaming segmentation
+* Station-specific configuration auto-tuning
+* Combined audio+video segmentation (future)
+
+---
+
+# 🤝 Contributing
+
+PRs welcome!
+Please file an issue before adding major features.
+Add tests for all new modules.
+
+---
+
+If you want, I can also:
+
+✅ Generate the scaffolding project folder with empty modules
+✅ Produce the `pyproject.toml` or `requirements.txt`
+✅ Write the initial CLI implementation
+✅ Create the `examples/` folder with realistic sample outputs
+
+Just tell me!
