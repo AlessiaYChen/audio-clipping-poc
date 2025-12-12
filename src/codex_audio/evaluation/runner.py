@@ -1,24 +1,42 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import csv
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from codex_audio.config import load_station_config
+from codex_audio.config import StationConfig, load_station_config
+from codex_audio.evaluation import io
+from codex_audio.evaluation.io import EvaluationExample
+from codex_audio.evaluation.matching import MatchCounts, match_segments
 from codex_audio.evaluation.metrics import compute_precision_recall
 
 
 class EvaluationRunner:
-    def __init__(self, config_path: Path, tolerance_seconds: float = 3.0) -> None:
+    def __init__(
+        self,
+        config_path: Optional[Path] = None,
+        tolerance_seconds: float = 3.0,
+    ) -> None:
         self.config_path = config_path
         self.tolerance_seconds = tolerance_seconds
-        self.station_config = load_station_config(config_path)
+        self.station_config = (
+            load_station_config(config_path) if config_path else StationConfig(name="default")
+        )
 
     def run(self, manifest_path: Path) -> Dict[str, float]:
-        _ = self._load_manifest(manifest_path)
-        return compute_precision_recall(tp=0, fp=0, fn=0)
+        examples = io.load_manifest(manifest_path)
+        counts = MatchCounts()
+        for example in examples:
+            example_counts = self._evaluate_example(example)
+            counts.accumulate(example_counts)
+        metrics = compute_precision_recall(counts.tp, counts.fp, counts.fn)
+        metrics.update({"tp": counts.tp, "fp": counts.fp, "fn": counts.fn})
+        return metrics
 
-    def _load_manifest(self, manifest_path: Path) -> List[Dict[str, str]]:
-        with manifest_path.open() as handle:
-            reader = csv.DictReader(handle)
-            return list(reader)
+    def _evaluate_example(self, example: EvaluationExample) -> MatchCounts:
+        references = io.load_reference_segments(example.annotation_path)
+        predictions = io.load_prediction_segments(example.prediction_path)
+        return match_segments(
+            predictions,
+            references,
+            tolerance_s=self.tolerance_seconds,
+        )

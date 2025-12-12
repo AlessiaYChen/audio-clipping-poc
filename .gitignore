@@ -14,3 +14,4 @@ samples/
 notebooks/.ipynb_checkpoints/
 logs/
 out/
+examples/*.mov

@@ -1,0 +1,26 @@
+﻿name: CKNW
+sample_rate: 16000
+heuristics:
+  boundary_threshold: 3.0
+  boundary_weights:
+    semantic_shift: 2.5
+    return_to_anchor:      3.0
+    text_semantic_shift:   3.0   # bump this up
+    audio_embedding_shift: 2.0
+    long_silence:          1.0
+    jingle_detected:       1.5
+  text_threshold: 0.7
+  silence_min_s: 1.2
+  min_story_s: 35
+  max_story_s: 210
+  candidate_min_score: 0.85
+  hard_min_cut_score: 1.3
+  change_score_smoothing: 1
+  snap_window_s: 1.0
+  change_score_weights:
+    audio: 1.0
+    text: 1.3
+    silence: 0.7
+    anchor: 1.5
+  audio_window_s: 5.0
+  audio_hop_ratio: 0.5

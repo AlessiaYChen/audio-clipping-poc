@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
@@ -17,7 +17,7 @@ app = typer.Typer(help="News audio story segmentation CLI")
 @app.command()
 def segment(
     audio_path: Path = typer.Argument(..., exists=True, readable=True),
-    station: str = typer.Option(..., "--station", "-s", help="Station identifier"),
+    station: str = typer.Option("CKNW", "--station", "-s", help="Station identifier"),
     out_dir: Path = typer.Option(Path("out"), "--out", "-o", help="Output directory"),
     config: Optional[Path] = typer.Option(None, help="Station config override"),
 ) -> None:
@@ -25,7 +25,18 @@ def segment(
         config=PipelineConfig(station=station, config_path=config)
     )
     result = pipeline.run(audio_path=audio_path, output_dir=out_dir)
-    console.print(f"Wrote manifest to {result.manifest_path}")
+    if result.normalized_audio:
+        console.print(f"Normalized WAV created at {result.normalized_audio}", style="green")
+    if result.segments:
+        console.print(f"Generated {len(result.segments)} segments", style="cyan")
+    else:
+        console.print("No segments generated", style="yellow")
+    if result.clip_paths:
+        console.print(f"Clips written to {result.clip_paths[0].parent}")
+    if result.transcript_path:
+        console.print(f"Transcript written to {result.transcript_path}")
+    if result.manifest_path:
+        console.print(f"Manifest written to {result.manifest_path}")
 
 
 @app.command()

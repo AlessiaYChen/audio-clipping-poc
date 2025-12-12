@@ -1,3 +1,3 @@
-﻿audio_path,annotation_path,station
-data/CKNW_2025-01-15.wav,annotations/CKNW_2025-01-15.csv,CKNW
-data/CFAX_2025-01-12.wav,annotations/CFAX_2025-01-12.csv,CFAX
+audio_path,annotation_path,prediction_path,station
+samples/audio.wav,annotations/audio.csv,predictions/audio_segments.json,CKNW
+samples/audio2.wav,annotations/audio2.csv,predictions/audio2_segments.json,CFAX
