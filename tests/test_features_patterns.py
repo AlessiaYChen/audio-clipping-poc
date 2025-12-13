@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
@@ -43,3 +43,20 @@ def test_find_anchor_return_candidates_without_anchor_pattern() -> None:
 def test_find_anchor_return_candidates_requires_three_segments() -> None:
     assert find_anchor_return_candidates([]) == []
     assert find_anchor_return_candidates([_seg("anchor", 0.0, 1.0)]) == []
+
+def test_anchor_identification_prefers_distributed_speaker() -> None:
+    segments = [
+        _seg("anchor", 0.0, 1.0),
+        _seg("guest", 1.0, 12.0),
+        _seg("anchor", 12.0, 13.0),
+        _seg("reporter", 13.0, 25.0),
+        _seg("anchor", 25.0, 26.0),
+    ]
+
+    candidates = find_anchor_return_candidates(segments)
+
+    assert candidates
+    assert any(candidate.reason == "anchor_return_start" for candidate in candidates)
+    # Should still identify the shorter, recurring speaker as anchor despite longer guest block
+    reasons = {candidate.reason for candidate in candidates}
+    assert "anchor_return_end" in reasons

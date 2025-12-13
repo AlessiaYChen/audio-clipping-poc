@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 
@@ -13,6 +13,7 @@ from codex_audio.segmentation.change_scores import (
     smooth_scores,
 )
 from codex_audio.text_features import TextChunk
+from codex_audio.transcription import TranscriptWord
 from codex_audio.text_features.embeddings import ChunkEmbedding
 
 
@@ -71,3 +72,23 @@ def test_smooth_and_peak_detection() -> None:
     candidates = find_peak_candidates(times, smoothed, min_score=0.5)
     assert len(candidates) == 1
     assert isinstance(candidates[0], BoundaryCandidate)
+
+def test_compute_change_points_applies_keyword_boost() -> None:
+    audio_embeddings = [
+        AudioEmbedding(start_s=0.0, end_s=5.0, vector=_audio_vec(1.0, 0.0)),
+        AudioEmbedding(start_s=2.5, end_s=7.5, vector=_audio_vec(0.9, 0.1)),
+    ]
+    words = [
+        TranscriptWord(text="Coming up", start_s=2.4, end_s=2.6),
+        TranscriptWord(text="weather", start_s=5.0, end_s=5.2),
+    ]
+
+    points = compute_change_points(
+        audio_embeddings=audio_embeddings,
+        transcript_words=words,
+        keyword_patterns=["coming up"],
+        keyword_score=4.0,
+    )
+
+    assert len(points) == 1
+    assert points[0].keyword_boost == 4.0

@@ -43,9 +43,26 @@ def find_anchor_return_candidates(
 
 
 def _find_anchor_speaker(segments: Sequence[DiarizationSegment]) -> str | None:
-    durations: DefaultDict[str, float] = defaultdict(float)
-    for segment in segments:
-        durations[segment.speaker] += max(0.0, segment.end_s - segment.start_s)
-    if not durations:
+    if not segments:
         return None
-    return max(durations.items(), key=lambda item: item[1])[0]
+
+    ordered = sorted(segments, key=lambda seg: seg.start_s)
+    start_speaker = ordered[0].speaker
+    end_speaker = ordered[-1].speaker
+
+    if start_speaker == end_speaker:
+        return start_speaker
+
+    scores: DefaultDict[str, float] = defaultdict(float)
+    counts: DefaultDict[str, int] = defaultdict(int)
+
+    for segment in ordered:
+        duration = max(0.0, segment.end_s - segment.start_s)
+        speaker = segment.speaker
+        scores[speaker] += duration
+        counts[speaker] += 1
+
+    if not scores:
+        return None
+
+    return max(scores.keys(), key=lambda speaker: scores[speaker] * counts[speaker])

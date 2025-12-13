@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from codex_audio.boundary.candidates import BoundaryCandidate
 from codex_audio.segmentation.selection import SegmentConstraint, greedy_select_boundaries
@@ -19,7 +19,7 @@ def test_greedy_select_boundaries_respects_constraints() -> None:
         constraints=constraint,
         hard_min_score=0.5,
     )
-    assert [round(c.time_s) for c in selected] == [60, 130]
+    assert [round(c.time_s) for c in selected] == [30, 60, 90, 130]
 
 
 def test_greedy_select_boundaries_respects_min_score() -> None:

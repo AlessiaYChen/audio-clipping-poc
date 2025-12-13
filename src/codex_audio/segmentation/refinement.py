@@ -19,13 +19,14 @@ DEFAULT_CHANGE_WEIGHTS: Mapping[str, float] = {
     "text": 1.3,
     "silence": 0.7,
     "anchor": 1.5,
+    "keyword": 3.0,
 }
 
 
 @dataclass
 class RefinementParams:
     constraints: SegmentConstraint = field(
-        default_factory=lambda: SegmentConstraint(min_len=30.0, max_len=210.0)
+        default_factory=lambda: SegmentConstraint(min_len=30.0, max_len=120.0)
     )
     weights: Mapping[str, float] = field(default_factory=lambda: dict(DEFAULT_CHANGE_WEIGHTS))
     candidate_min_score: float = 0.8

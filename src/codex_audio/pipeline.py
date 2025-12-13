@@ -36,7 +36,7 @@ DEFAULT_AUDIO_HOP_RATIO = 0.5
 DEFAULT_TEXT_CHUNK_S = 5.0
 DEFAULT_TEXT_OVERLAP = 0.5
 DEFAULT_MIN_STORY_S = 30.0
-DEFAULT_MAX_STORY_S = 210.0
+DEFAULT_MAX_STORY_S = 120.0
 DEFAULT_CANDIDATE_MIN_SCORE = 0.8
 DEFAULT_HARD_MIN_SCORE = 1.2
 DEFAULT_SNAP_WINDOW_S = 1.0
@@ -126,6 +126,7 @@ class StorySegmentationPipeline:
             text_embeddings=text_embeddings or None,
             vad_segments=vad_segments,
             diarization_segments=None,
+            transcript_words=transcript_words,
             **change_kwargs,
         )
 
@@ -376,8 +377,15 @@ class StorySegmentationPipeline:
             snap_window_s=max(0.0, snap_window),
         )
 
-    def _change_point_kwargs(self) -> Dict[str, float]:
+    def _change_point_kwargs(self) -> Dict[str, object]:
         heuristics = self.station_config.heuristics or {}
+        patterns_raw = heuristics.get("keyword_patterns")
+        if isinstance(patterns_raw, str):
+            keyword_patterns = [patterns_raw]
+        elif isinstance(patterns_raw, (list, tuple)):
+            keyword_patterns = [str(item) for item in patterns_raw if item is not None]
+        else:
+            keyword_patterns = None
         return {
             "silence_window_s": _first_float(
                 heuristics,
@@ -400,6 +408,8 @@ class StorySegmentationPipeline:
             "text_threshold": _clamped_threshold(
                 _first_float(heuristics, ["text_threshold"], 0.7)
             ),
+            "keyword_patterns": keyword_patterns,
+            "keyword_score": _first_float(heuristics, ["keyword_score"], 5.0),
         }
 
 

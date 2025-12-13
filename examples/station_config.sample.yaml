@@ -15,7 +15,12 @@ heuristics:
     text: 1.3
     silence: 0.7
     anchor: 1.5
+    keyword: 3.0
   snap_window_s: 1.0
+  keyword_patterns:
+    - "(?i)coming up"
+    - "(?i)and now"
+  keyword_score: 5.0
 text:
   chunk_s: 8
   embedding_model: text-embedding-3-large

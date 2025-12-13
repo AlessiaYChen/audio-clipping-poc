@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Mapping, Sequence
+from bisect import bisect_left
+import re
+from typing import Iterable, List, Mapping, Sequence, Pattern
 
 from codex_audio.boundary.candidates import BoundaryCandidate
 from codex_audio.features.diarization import DiarizationSegment
@@ -9,6 +11,7 @@ from codex_audio.features.embeddings import AudioEmbedding
 from codex_audio.features.patterns import find_anchor_return_candidates
 from codex_audio.features.vad import SILENCE_LABEL, VadSegment
 from codex_audio.text_features.embeddings import ChunkEmbedding
+from codex_audio.transcription import TranscriptWord
 
 DEFAULT_SILENCE_WINDOW_S = 1.0
 DEFAULT_SILENCE_NORM_S = 1.0
@@ -24,6 +27,7 @@ class ChangePoint:
     text_change: float = 0.0
     silence_change: float = 0.0
     anchor_flag: float = 0.0
+    keyword_boost: float = 0.0
 
     def combined(self, weights: Mapping[str, float]) -> float:
         return (
@@ -31,6 +35,7 @@ class ChangePoint:
             + self.text_change * weights.get("text", 1.0)
             + self.silence_change * weights.get("silence", 1.0)
             + self.anchor_flag * weights.get("anchor", 1.0)
+            + self.keyword_boost * weights.get("keyword", 1.0)
         )
 
 
@@ -40,6 +45,9 @@ def compute_change_points(
     text_embeddings: Sequence[ChunkEmbedding] | None = None,
     vad_segments: Sequence[VadSegment] | None = None,
     diarization_segments: Sequence[DiarizationSegment] | None = None,
+    transcript_words: Sequence[TranscriptWord] | None = None,
+    keyword_patterns: Sequence[str] | None = None,
+    keyword_score: float = 5.0,
     silence_window_s: float = DEFAULT_SILENCE_WINDOW_S,
     silence_norm_s: float = DEFAULT_SILENCE_NORM_S,
     anchor_tolerance_s: float = DEFAULT_ANCHOR_TOLERANCE_S,
@@ -66,6 +74,12 @@ def compute_change_points(
     if diarization_segments:
         anchor_flags = _anchor_flags(boundary_times, diarization_segments, anchor_tolerance_s)
         _apply_component(points, anchor_flags, "anchor_flag")
+
+    if transcript_words and keyword_patterns:
+        keyword_changes = _keyword_boosts(
+            boundary_times, transcript_words, keyword_patterns, keyword_score
+        )
+        _apply_component(points, keyword_changes, "keyword_boost")
 
     return points
 
@@ -172,6 +186,50 @@ def _anchor_flags(
                 break
         change_map.append((time, flag))
     return change_map
+
+
+
+def _keyword_boosts(
+    times: Sequence[float],
+    words: Sequence[TranscriptWord],
+    patterns: Sequence[str],
+    score: float,
+) -> List[tuple[float, float]]:
+    if not times or not patterns:
+        return []
+    regexes: List[re.Pattern[str]] = []
+    for pattern in patterns:
+        if not pattern:
+            continue
+        try:
+            regexes.append(re.compile(pattern, re.IGNORECASE))
+        except re.error:
+            continue
+    if not regexes:
+        return []
+    boosts: List[tuple[float, float]] = []
+    for word in words:
+        token = word.text.strip()
+        if not token:
+            continue
+        if not any(regex.search(token) for regex in regexes):
+            continue
+        boundary_time = _nearest_boundary_time(times, word.start_s)
+        boosts.append((boundary_time, score))
+    return boosts
+
+
+def _nearest_boundary_time(times: Sequence[float], target: float) -> float:
+    if not times:
+        return target
+    idx = bisect_left(times, target)
+    if idx <= 0:
+        return times[0]
+    if idx >= len(times):
+        return times[-1]
+    left = times[idx - 1]
+    right = times[idx]
+    return left if abs(target - left) <= abs(right - target) else right
 
 
 def _apply_component(
