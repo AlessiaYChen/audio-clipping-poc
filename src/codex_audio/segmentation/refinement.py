@@ -11,7 +11,7 @@ from codex_audio.segmentation.change_scores import (
     smooth_scores,
 )
 from codex_audio.segmentation.planner import SegmentPlan
-from codex_audio.segmentation.selection import SegmentConstraint, greedy_select_boundaries
+from codex_audio.segmentation.selection import SegmentConstraint, select_boundaries
 from codex_audio.transcription import TranscriptWord
 
 DEFAULT_CHANGE_WEIGHTS: Mapping[str, float] = {
@@ -57,28 +57,43 @@ def refine_chunk_segments(
     window_points = [
         point for point in change_points if chunk_start < point.time_s < chunk_end
     ]
-    if not window_points:
-        return [SegmentPlan(chunk_start, chunk_end, _FULL_LABEL)]
+    if window_points:
+        scores = [point.combined(params.weights) for point in window_points]
+        smoothed = smooth_scores(scores, window_size=params.smoothing_window)
+        times = [point.time_s for point in window_points]
+        candidates = find_peak_candidates(
+            times,
+            smoothed,
+            min_score=params.candidate_min_score,
+            reason=peak_reason,
+        )
+    else:
+        candidates = []
 
-    scores = [point.combined(params.weights) for point in window_points]
-    smoothed = smooth_scores(scores, window_size=params.smoothing_window)
-    times = [point.time_s for point in window_points]
-    candidates = find_peak_candidates(
-        times,
-        smoothed,
-        min_score=params.candidate_min_score,
-        reason=peak_reason,
-    )
-    if not candidates:
-        return [SegmentPlan(chunk_start, chunk_end, _FULL_LABEL)]
+    safe_candidates: list[BoundaryCandidate] = []
+    if vad_segments:
+        for candidate in candidates:
+            is_safe = False
+            for segment in vad_segments:
+                if segment.start_s <= candidate.time_s <= segment.end_s:
+                    if segment.label == SILENCE_LABEL and segment.duration() >= 0.4:
+                        is_safe = True
+                    break
+            if is_safe or candidate.score > 2.5:
+                safe_candidates.append(candidate)
+    else:
+        safe_candidates = list(candidates)
 
-    selected = greedy_select_boundaries(
-        candidates,
+    selected = select_boundaries(
+        safe_candidates,
         chunk_start=chunk_start,
         chunk_end=chunk_end,
         constraints=params.constraints,
         hard_min_score=params.hard_min_cut_score,
     )
+
+    min_len = params.constraints.min_len
+
     if not selected:
         return [SegmentPlan(chunk_start, chunk_end, _FULL_LABEL)]
 
@@ -93,8 +108,9 @@ def refine_chunk_segments(
         chunk_start=chunk_start,
         chunk_end=chunk_end,
         boundaries=snapped,
-        min_len=params.constraints.min_len,
+        min_len=min_len,
     )
+
 
 
 def _snap_candidates(
@@ -130,6 +146,7 @@ def _snap_candidates(
     return deduped
 
 
+
 def _snap_time(
     time_s: float,
     *,
@@ -137,30 +154,25 @@ def _snap_time(
     transcript_words: Sequence[TranscriptWord] | None,
     window_s: float,
 ) -> float:
-    if window_s <= 0:
+    if window_s <= 0 or not vad_segments:
         return time_s
+
     best_time = time_s
-    best_delta = window_s
+    max_duration = 0.0
+    search_start = time_s - window_s
+    search_end = time_s + window_s
 
-    if vad_segments:
-        for segment in vad_segments:
-            if segment.label != SILENCE_LABEL:
-                continue
-            if segment.end_s < time_s - window_s or segment.start_s > time_s + window_s:
-                continue
-            midpoint = segment.start_s + segment.duration() / 2
-            delta = abs(midpoint - time_s)
-            if delta < best_delta:
-                best_delta = delta
-                best_time = midpoint
-
-    if transcript_words:
-        for word in transcript_words:
-            for boundary in (word.start_s, word.end_s):
-                delta = abs(boundary - time_s)
-                if delta <= window_s and delta < best_delta:
-                    best_delta = delta
-                    best_time = boundary
+    for segment in vad_segments:
+        if segment.label != SILENCE_LABEL:
+            continue
+        start_overlap = max(search_start, segment.start_s)
+        end_overlap = min(search_end, segment.end_s)
+        if end_overlap <= start_overlap:
+            continue
+        duration = segment.duration()
+        if duration > max_duration:
+            max_duration = duration
+            best_time = (segment.start_s + segment.end_s) / 2
 
     return best_time
 
@@ -190,3 +202,6 @@ def _segments_from_boundaries(
     else:
         segments[-1].end_s = chunk_end
     return segments
+
+
+

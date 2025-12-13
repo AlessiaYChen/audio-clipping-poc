@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from typing import List, Sequence, Tuple
 
 from codex_audio.boundary.candidates import BoundaryCandidate
 
@@ -12,7 +12,7 @@ class SegmentConstraint:
     max_len: float | None = None
 
 
-def greedy_select_boundaries(
+def select_boundaries(
     candidates: Sequence[BoundaryCandidate],
     *,
     chunk_start: float,
@@ -20,55 +20,71 @@ def greedy_select_boundaries(
     constraints: SegmentConstraint,
     hard_min_score: float = 0.0,
 ) -> List[BoundaryCandidate]:
-    """Select boundary candidates via dynamic programming.
+    """Selects the optimal set of cuts via dynamic programming."""
 
-    Computes the globally optimal subset of boundaries that maximizes the total
-    score while respecting segment length constraints.
-    """
-    sorted_candidates = sorted(candidates, key=lambda c: c.time_s)
-    points = [chunk_start] + [c.time_s for c in sorted_candidates] + [chunk_end]
+    valid_candidates = [c for c in candidates if c.score >= hard_min_score]
+
+    points: List[Tuple[float, float, BoundaryCandidate | None]] = []
+    points.append((chunk_start, 0.0, None))
+    for candidate in sorted(valid_candidates, key=lambda c: c.time_s):
+        if chunk_start < candidate.time_s < chunk_end:
+            points.append((candidate.time_s, candidate.score, candidate))
+    points.append((chunk_end, 0.0, None))
+
     n = len(points)
     if n < 2:
         return []
 
-    min_len = max(0.0, constraints.min_len)
-    max_len = constraints.max_len
+    min_len = constraints.min_len
+    max_len = constraints.max_len if constraints.max_len is not None else float("inf")
 
-    dp = [-float("inf")] * n
+    dp = [-1.0] * n
     parent = [-1] * n
     dp[0] = 0.0
 
     for i in range(1, n):
+        current_time = points[i][0]
+        current_score = points[i][1]
         for j in range(i - 1, -1, -1):
-            seg_len = points[i] - points[j]
-            if seg_len < 0:
+            prev_time = points[j][0]
+            segment_len = current_time - prev_time
+            if segment_len > max_len:
+                break
+            if segment_len < min_len and i != n - 1:
                 continue
-            if i != n - 1 and seg_len < min_len:
+            if dp[j] == -1.0:
                 continue
-            if max_len is not None and seg_len > max_len:
-                continue
-            if i == n - 1:
-                cut_score = 0.0
-            else:
-                candidate = sorted_candidates[i - 1]
-                if candidate.score < hard_min_score:
-                    continue
-                cut_score = candidate.score
-            best = dp[j] + cut_score
-            if best > dp[i]:
-                dp[i] = best
+            score = dp[j] + current_score
+            if score > dp[i]:
+                dp[i] = score
                 parent[i] = j
 
-    if dp[-1] == -float("inf"):
-        return []
+    if dp[-1] == -1.0:
+        return _fallback_greedy(candidates, chunk_start, chunk_end, constraints)
 
     selected: List[BoundaryCandidate] = []
     idx = n - 1
     while parent[idx] != -1:
-        prev = parent[idx]
-        if idx != n - 1:
-            selected.append(sorted_candidates[idx - 1])
-        idx = prev
-    selected.reverse()
-    return selected
+        candidate = points[idx][2]
+        if candidate is not None:
+            selected.append(candidate)
+        idx = parent[idx]
+    return sorted(selected, key=lambda c: c.time_s)
 
+
+def _fallback_greedy(
+    candidates: Sequence[BoundaryCandidate],
+    chunk_start: float,
+    chunk_end: float,
+    constraints: SegmentConstraint,
+) -> List[BoundaryCandidate]:
+    sorted_candidates = sorted(candidates, key=lambda c: c.score, reverse=True)
+    selected: List[BoundaryCandidate] = []
+    placed = [chunk_start, chunk_end]
+
+    for candidate in sorted_candidates:
+        if any(abs(candidate.time_s - taken) < constraints.min_len for taken in placed):
+            continue
+        selected.append(candidate)
+        placed.append(candidate.time_s)
+    return sorted(selected, key=lambda c: c.time_s)
