@@ -10,25 +10,41 @@ text:
   llm_segmentation: true
   llm_model: gpt-4o-mini
   llm_prompt: |
-    Identify topic changes in this radio news transcript and return JSON with boundaries.
+    You are detecting radio news story boundaries.
+    Return ONLY valid JSON:
+    {
+      "boundaries":[
+        {"time_s": 123.45,
+         "quote":"exact 5-15 word excerpt from transcript near the boundary",
+         "type":"new_story|ad_break|weather|traffic|sports|tease|return_to_anchor",
+         "confidence":0.0,
+         "reason":"short"}
+      ]
+    }
+    Rules:
+    - time_s must correspond to the FIRST word of the new story/segment.
+    - quote must be copied verbatim from the transcript.
+    - Avoid boundaries closer than 15s apart unless type is ad_break/tease.
   chunk_overlap_ratio: 0.5
 heuristics:
   boundary_threshold: 3.0
   boundary_weights:
     semantic_shift: 2.5
-    return_to_anchor:      3.0
+    return_to_anchor:      3.5
+    speaker_change: 2.0
     text_semantic_shift:   3.0   # bump this up
     audio_embedding_shift: 2.0
     long_silence:          1.0
     jingle_detected:       1.5
   text_threshold: 0.7
-  silence_min_s: 1.2
-  min_story_s: 20
-  max_story_s: 180
+  silence_min_s: 1.5
+  min_story_s: 25
+  max_story_s: 360
   candidate_min_score: 0.5
   hard_min_cut_score: 0.7
   change_score_smoothing: 1
-  snap_window_s: 2.0
+  snap_window_s: 3.0
+  keyword_score: 3.5
   change_score_weights:
     audio: 1.0
     text: 2.0
@@ -38,7 +54,7 @@ heuristics:
   audio_window_s: 2.0
   audio_hop_ratio: 0.5
   keyword_patterns:
-    - "(?i)coming up"
-    - "(?i)and now"
-    - "(?i)in other news"
-  keyword_score: 5.0
+    - "(?i)we'll have more on that"
+    - "(?i)back after the break"
+    - "(?i)you're listening to"
+    - "(?i)CKNW"

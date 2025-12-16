@@ -32,5 +32,19 @@ text:
   llm_segmentation: false
   llm_model: gpt-4o-mini
   llm_prompt: |
-    Identify topic changes.
+    You are detecting radio news story boundaries.
+    Return ONLY valid JSON:
+    {
+      "boundaries":[
+        {"time_s": 123.45,
+         "quote":"exact 5-15 word excerpt from transcript near the boundary",
+         "type":"new_story|ad_break|weather|traffic|sports|tease|return_to_anchor",
+         "confidence":0.0-1.0,
+         "reason":"short"}
+      ]
+    }
+    Rules:
+    - time_s must correspond to the FIRST word of the new story/segment.
+    - quote must be copied verbatim from the transcript.
+    - Avoid boundaries closer than 15s apart unless type is ad_break/tease.
   embedding_model: text-embedding-3-large
