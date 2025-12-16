@@ -22,6 +22,7 @@ class StationConfig:
     sample_rate: int = 16_000
     vad: Dict[str, Any] = field(default_factory=dict)
     diarization: Dict[str, Any] = field(default_factory=dict)
+    transcription: Dict[str, Any] = field(default_factory=dict)
     heuristics: Dict[str, Any] = field(default_factory=dict)
     text: Dict[str, Any] = field(default_factory=dict)
 
@@ -53,6 +54,7 @@ def load_station_config(path: Path) -> StationConfig:
         sample_rate=data.get("sample_rate", 16_000),
         vad=data.get("vad", {}),
         diarization=data.get("diarization", {}),
+        transcription=data.get("transcription", {}),
         heuristics=data.get("heuristics", {}),
         text=data.get("text", {}),
     )

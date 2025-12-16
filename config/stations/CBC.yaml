@@ -32,3 +32,8 @@ heuristics:
     - "(?i)meanwhile"
     - "(?i)in other news"
   keyword_score: 5.0
+transcription:
+  provider: azure_speech
+  diarization: true
+  max_speakers: 6
+  language: en-CA

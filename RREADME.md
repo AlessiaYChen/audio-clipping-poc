@@ -1,4 +1,4 @@
-# 📡 News Audio Story Segmentation
+﻿# ðŸ“¡ News Audio Story Segmentation
 
 ### Hybrid Audio + Text Pipeline for Radio Story Boundary Detection
 
@@ -14,35 +14,35 @@ This project performs **automatic segmentation of radio newscasts** (CKNW, CFAX,
 
 ---
 
-## 🚀 Features
+## ðŸš€ Features
 
-* 🎧 **Audio track analysis**
+* ðŸŽ§ **Audio track analysis**
 
   * Voice Activity Detection (VAD)
   * Speaker diarization (anchor detection, studio/field separation)
-  * Short-window audio embeddings (3–5 s)
+  * Short-window audio embeddings (3â€“5 s)
   * Acoustic change-point detection
   * Silence & jingle detection
 
-* 📝 **Text track analysis**
+* ðŸ“ **Text track analysis**
 
   * Whisper/Azure STT transcription
   * Word-aligned timestamps
-  * Text chunking (5–10 s)
+  * Text chunking (5â€“10 s)
   * Semantic embeddings
   * Topic shift detection
 
-* 🔍 **Hybrid boundary detection**
+* ðŸ” **Hybrid boundary detection**
 
   * Combines audio + text + structural heuristics
   * Scored boundary candidates with reasons
   * Station-specific tunable configs
 
-* ✂️ **Clipper**
+* âœ‚ï¸ **Clipper**
 
   * Clean, gap-free, timestamp-accurate FFmpeg clipping
 
-* 📊 **Evaluation harness**
+* ðŸ“Š **Evaluation harness**
 
   * GT boundary loading
   * Tolerance-based matching
@@ -52,53 +52,53 @@ This project performs **automatic segmentation of radio newscasts** (CKNW, CFAX,
 
 ---
 
-# 📦 Architecture Overview
+# ðŸ“¦ Architecture Overview
 
 ```
 audio file
-   │
-   ▼
-┌──────────────────┐
-│    Ingestor      │  → normalize + resample (16k mono WAV)
-└──────────────────┘
-   │
-   ▼
+   â”‚
+   â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚    Ingestor      â”‚  â†’ normalize + resample (16k mono WAV)
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+   â”‚
+   â–¼
 
-        ┌────────────────────────────────────────┐
-        │         Dual Feature Extraction        │
-        └────────────────────────────────────────┘
+        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+        â”‚         Dual Feature Extraction        â”‚
+        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 
-  ┌───────────────────────────┐      ┌──────────────────────────────┐
-  │      Audio Track          │      │          Text Track          │
-  │  - VAD                    │      │  - Transcription (Whisper)   │
-  │  - Diarization            │      │  - Word timestamps           │
-  │  - Audio embeddings       │      │  - Text chunking (5–10 s)    │
-  │  - Jingle/silence detect  │      │  - Semantic embeddings       │
-  └───────────────────────────┘      │  - Semantic shift detection  │
-                                     └──────────────────────────────┘
-   │                                           │
-   └──────────────────────┬────────────────────┘
-                          ▼
-            ┌───────────────────────────────────────┐
-            │        Hybrid Boundary Detector        │
-            │  - score candidates                    │
-            │  - merge audio + text signals          │
-            └───────────────────────────────────────┘
-                          │
-                          ▼
-            ┌───────────────────────────────────────┐
-            │             Segment Planner            │
-            │ - prune, dedupe, min length            │
-            │ - snap to word boundary / energy dip   │
-            └───────────────────────────────────────┘
-                          │
-                          ▼
-            ┌───────────────────────────────────────┐
-            │                Clipper                 │
-            │     - FFmpeg cuts per segment          │
-            └───────────────────────────────────────┘
-                          │
-                          ▼
+  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”      â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+  â”‚      Audio Track          â”‚      â”‚          Text Track          â”‚
+  â”‚  - VAD                    â”‚      â”‚  - Transcription (Whisper)   â”‚
+  â”‚  - Diarization            â”‚      â”‚  - Word timestamps           â”‚
+  â”‚  - Audio embeddings       â”‚      â”‚  - Text chunking (5â€“10 s)    â”‚
+  â”‚  - Jingle/silence detect  â”‚      â”‚  - Semantic embeddings       â”‚
+  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜      â”‚  - Semantic shift detection  â”‚
+                                     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+   â”‚                                           â”‚
+   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                          â–¼
+            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+            â”‚        Hybrid Boundary Detector        â”‚
+            â”‚  - score candidates                    â”‚
+            â”‚  - merge audio + text signals          â”‚
+            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                          â”‚
+                          â–¼
+            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+            â”‚             Segment Planner            â”‚
+            â”‚ - prune, dedupe, min length            â”‚
+            â”‚ - snap to word boundary / energy dip   â”‚
+            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                          â”‚
+                          â–¼
+            â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+            â”‚                Clipper                 â”‚
+            â”‚     - FFmpeg cuts per segment          â”‚
+            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                          â”‚
+                          â–¼
                Output:
                - segments.json
                - transcript.json
@@ -110,7 +110,7 @@ A high-resolution PDF version is available (`docs/news_audio_architecture.pdf`).
 
 ---
 
-# 📁 Repository Structure
+# ðŸ“ Repository Structure
 
 Recommended layout:
 
@@ -168,7 +168,7 @@ codex-audio/
 
 ---
 
-# 🛠 Installation
+# ðŸ›  Installation
 
 ### Requirements:
 
@@ -183,7 +183,30 @@ pip install -r requirements.txt
 
 ---
 
-# 🧪 Running the Pipeline
+# ðŸ§ª Running the Pipeline
+
+## Azure Transcription & Diarization
+
+1. Set `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` in your shell (or `.env`).
+2. Add a `transcription` block to your station config so Azure STT can emit speaker IDs:
+
+```yaml
+transcription:
+  provider: azure_speech
+  diarization: true
+  max_speakers: 6
+```
+
+3. Run the CLI normally:
+
+```bash
+codex-audio segment examples/CBU_730z_251119_072800.mov \
+  --station CKNW \
+  --config config/stations/CKNW.yaml \
+  --out out/diarized
+```
+
+With `diarization: true`, the emitted `transcript.json` includes a `speaker` field for every word, and the pipeline still performs the LLM quote alignment and silence refinement automatically.
 
 ### Segment an audio file
 
@@ -206,7 +229,7 @@ out_dir/
 
 ---
 
-# 📊 Evaluation Harness
+# ðŸ“Š Evaluation Harness
 
 ### Manifest format (`evaluation_manifest.csv`)
 
@@ -251,7 +274,7 @@ CKNW:
 
 ---
 
-# 🔬 Threshold Sweeps
+# ðŸ”¬ Threshold Sweeps
 
 ```bash
 codex-audio sweep \
@@ -271,7 +294,7 @@ silence_min_s,min_boundary_score,F1
 
 ---
 
-# 🧩 Extending the Pipeline
+# ðŸ§© Extending the Pipeline
 
 Future enhancements:
 
@@ -283,7 +306,7 @@ Future enhancements:
 
 ---
 
-# 🤝 Contributing
+# ðŸ¤ Contributing
 
 PRs welcome!
 Please file an issue before adding major features.
@@ -293,9 +316,10 @@ Add tests for all new modules.
 
 If you want, I can also:
 
-✅ Generate the scaffolding project folder with empty modules
-✅ Produce the `pyproject.toml` or `requirements.txt`
-✅ Write the initial CLI implementation
-✅ Create the `examples/` folder with realistic sample outputs
+âœ… Generate the scaffolding project folder with empty modules
+âœ… Produce the `pyproject.toml` or `requirements.txt`
+âœ… Write the initial CLI implementation
+âœ… Create the `examples/` folder with realistic sample outputs
 
 Just tell me!
+

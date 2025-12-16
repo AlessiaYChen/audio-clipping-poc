@@ -4,10 +4,12 @@ import json
 import math
 import os
 import re
+import threading
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+import warnings
 
 try:
     import azure.cognitiveservices.speech as speechsdk
@@ -65,12 +67,15 @@ class TranscriptionError(RuntimeError):
     """Raised when Azure STT fails to return a valid transcript."""
 
 
+
 def transcribe_audio(
     audio_path: Path,
     *,
     key: Optional[str] = None,
     region: Optional[str] = None,
     language: str = "en-US",
+    diarization_enabled: bool = False,
+    max_speakers: Optional[int] = None,
 ) -> TranscriptionOutput:
     if speechsdk is None:
         raise RuntimeError(
@@ -92,13 +97,39 @@ def transcribe_audio(
     speech_config.output_format = speechsdk.OutputFormat.Detailed
 
     audio_config = speechsdk.audio.AudioConfig(filename=str(audio_path))
-    recognizer = speechsdk.SpeechRecognizer(
-        speech_config=speech_config,
-        audio_config=audio_config,
-        language=language,
-    )
-    _enable_diarization(recognizer)
+    if diarization_enabled:
+        try:
+            words, raw_payload = _transcribe_with_conversation(
+                speech_config,
+                audio_config,
+                language=language,
+                max_speakers=max_speakers,
+            )
+        except TranscriptionError as exc:
+            warnings.warn(
+                f'Conversation transcriber unavailable ({exc}); falling back to standard recognizer.',
+                RuntimeWarning,
+            )
+            recognizer = speechsdk.SpeechRecognizer(
+                speech_config=speech_config,
+                audio_config=audio_config,
+                language=language,
+            )
+            words, raw_payload = _transcribe_with_recognizer(recognizer)
+    else:
+        recognizer = speechsdk.SpeechRecognizer(
+            speech_config=speech_config,
+            audio_config=audio_config,
+            language=language,
+        )
+        words, raw_payload = _transcribe_with_recognizer(recognizer)
 
+    return TranscriptionOutput(words=words, model="azure-stt", language=language, raw=raw_payload)
+
+
+
+
+def _transcribe_with_recognizer(recognizer: Any) -> Tuple[List[TranscriptWord], Dict[str, Any]]:
     result = recognizer.recognize_once_async().get()
     if result.reason == speechsdk.ResultReason.Canceled:
         details = speechsdk.CancellationDetails(result)
@@ -108,7 +139,61 @@ def transcribe_audio(
 
     payload = _parse_payload(result.json)
     words = _extract_words(payload)
-    return TranscriptionOutput(words=words, model="azure-stt", language=language, raw=payload)
+    return words, payload
+
+
+def _transcribe_with_conversation(
+    speech_config: Any,
+    audio_config: Any,
+    *,
+    language: str,
+    max_speakers: Optional[int],
+) -> Tuple[List[TranscriptWord], Dict[str, Any]]:
+    transcription_module = getattr(speechsdk, 'transcription', None)
+    if transcription_module is None:
+        raise TranscriptionError('Azure Speech transcription module unavailable')
+    transcriber_cls = getattr(transcription_module, 'ConversationTranscriber', None)
+    if transcriber_cls is None:
+        raise TranscriptionError('ConversationTranscriber not available in this SDK version')
+
+    transcriber = transcriber_cls(speech_config, audio_config)
+    _enable_diarization(transcriber, True, max_speakers)
+
+    done = threading.Event()
+    errors: list[str] = []
+    payloads: list[Dict[str, Any]] = []
+    words: list[TranscriptWord] = []
+
+    def _handle_evt(evt: Any) -> None:
+        payload = _parse_payload(getattr(evt.result, 'json', ''))
+        payloads.append(payload)
+        words.extend(_extract_words(payload))
+
+    def _handle_stop(_: Any) -> None:
+        done.set()
+
+    def _handle_cancel(evt: Any) -> None:
+        details = getattr(evt.result, 'cancellation_details', None)
+        reason = getattr(details, 'reason', getattr(evt.result, 'reason', 'canceled'))
+        reason_str = str(reason)
+        if reason_str.lower().endswith('endofstream'):
+            done.set()
+            return
+        errors.append(reason_str)
+        done.set()
+
+    transcriber.transcribed.connect(_handle_evt)
+    transcriber.session_stopped.connect(_handle_stop)
+    transcriber.canceled.connect(_handle_cancel)
+
+    transcriber.start_transcribing_async().get()
+    while not done.wait(0.1):
+        continue
+    transcriber.stop_transcribing_async().get()
+
+    if errors:
+        raise TranscriptionError(f'Transcription canceled: {errors[-1]}')
+    return words, {'segments': payloads, 'language': language}
 
 
 def _parse_payload(raw_json: str) -> Dict[str, Any]:
@@ -126,12 +211,15 @@ def _extract_words(payload: Dict[str, Any]) -> List[TranscriptWord]:
     if not nbest:
         return words
     top = nbest[0]
+    segment_speaker = top.get("SpeakerId") or payload.get("SpeakerId")
+    if segment_speaker is not None:
+        segment_speaker = str(segment_speaker)
     for item in top.get("Words", []):
         text = item.get("Word", "")
         offset = float(item.get("Offset", 0)) / _WORD_TIMING_SCALE
         duration = float(item.get("Duration", 0)) / _WORD_TIMING_SCALE
         speaker_raw = item.get("SpeakerId")
-        speaker_id = str(speaker_raw) if speaker_raw is not None else None
+        speaker_id = str(speaker_raw) if speaker_raw is not None else segment_speaker
         words.append(
             TranscriptWord(text=text, start_s=offset, end_s=offset + duration, speaker_id=speaker_id)
         )
@@ -282,8 +370,8 @@ def _normalize_text(text: str) -> str:
     return re.sub(r"[^a-z0-9']+", " ", text.lower()).strip()
 
 
-def _enable_diarization(recognizer: Any) -> None:
-    if speechsdk is None:
+def _enable_diarization(target: Any, enabled: bool, max_speakers: Optional[int]) -> None:
+    if not enabled or speechsdk is None:
         return
     diarization_cls = getattr(speechsdk, "SpeakerDiarizationConfig", None)
     if diarization_cls is None:
@@ -295,7 +383,10 @@ def _enable_diarization(recognizer: Any) -> None:
     set_count = getattr(diarization_config, "set_speaker_count", None)
     if callable(set_count):
         try:
-            set_count(2)
+            if max_speakers is not None:
+                set_count(int(max_speakers))
+            else:
+                set_count(2)
         except Exception:
             pass
-    setattr(recognizer, "speaker_diarization_config", diarization_config)
+    setattr(target, "speaker_diarization_config", diarization_config)

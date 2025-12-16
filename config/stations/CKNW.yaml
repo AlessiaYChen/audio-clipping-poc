@@ -1,5 +1,10 @@
 ﻿name: CKNW
 sample_rate: 16000
+transcription:
+  provider: azure_speech
+  diarization: true
+  max_speakers: 6
+  language: en-CA
 text:
   chunk_size_s: 3.0        # NEW: Higher precision text analysis
   llm_segmentation: true

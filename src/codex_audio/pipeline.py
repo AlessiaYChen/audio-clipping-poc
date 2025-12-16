@@ -61,7 +61,7 @@ class PipelineConfig:
     min_silence_s: float = 1.0
     min_segment_s: float = 20.0
     transcription_enabled: bool = True
-    transcription_language: str = "en-US"
+    transcription_language: str = "en-CA"
     transcription_key: Optional[str] = None
     transcription_region: Optional[str] = None
 
@@ -211,12 +211,14 @@ class StorySegmentationPipeline:
         )
 
     def _run_transcription(self, audio_path: Path) -> Optional[TranscriptionOutput]:
+        options = self._transcription_options()
         try:
             return transcribe_audio(
                 audio_path,
                 key=self.config.transcription_key,
                 region=self.config.transcription_region,
                 language=self.config.transcription_language,
+                **options,
             )
         except Exception as exc:  # pragma: no cover - logging path
             logger.warning("Transcription failed", extra={"error": str(exc)})
@@ -334,6 +336,24 @@ class StorySegmentationPipeline:
             quote=candidate.quote,
         )
 
+
+
+    def _transcription_options(self) -> dict[str, Any]:
+        cfg = getattr(self.station_config, 'transcription', None) or {}
+        diarization_cfg = cfg or getattr(self.station_config, 'diarization', None) or {}
+        flag = diarization_cfg.get('diarization')
+        if flag is None:
+            flag = diarization_cfg.get('enabled')
+        enabled = bool(flag)
+        max_speakers = diarization_cfg.get('max_speakers')
+        try:
+            max_speakers = int(max_speakers) if max_speakers is not None else None
+        except (TypeError, ValueError):
+            max_speakers = None
+        return {
+            'diarization_enabled': enabled,
+            'max_speakers': max_speakers,
+        }
 
 
     def _audio_embedding_options(self) -> tuple[float, float]:
