@@ -3,7 +3,7 @@ sample_rate: 16000
 transcription:
   provider: azure_speech
   diarization: true
-  max_speakers: 6
+  max_speakers: 17
   language: en-CA
 text:
   chunk_size_s: 3.0        # NEW: Higher precision text analysis
